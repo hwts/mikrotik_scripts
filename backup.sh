@@ -3,10 +3,11 @@
 #vars
 USER="user"
 HOSTS=(
-	"192.168.10.128"
-	"192.168.10.122"
+	"192.168.10.169"
+	"192.168.10.170"
 )
 SSH_KEY="./id_rsa"
+PORT="22"
 BACKUP_DIR="$HOME/backups/mikrotik"
 DEBUG_MODE=0
 
@@ -45,23 +46,29 @@ if [ ! -d "$BACKUP_DIR" ]; then
   mkdir -p "$BACKUP_DIR"
 fi
 
+
 for i in "${HOSTS[@]}";
 do
 
-DEV_NAME="$(ssh -o StrictHostKeyChecking=no $USER@$i -i $SSH_KEY "/system identity print" | grep "name" | cut -d ":" -f2 | tr -d ' ' | tr -d '\r' )";
-DATE_NOW="$(date "+%Y_%m_%d_%H_%M")";
-BACKUP_NAME="${DEV_NAME}-${DATE_NOW}";
-ssh -o StrictHostKeyChecking=no $USER@$i -i $SSH_KEY "/export file=$BACKUP_NAME"
+nc -z $i $PORT
 
-ssh -o StrictHostKeyChecking=no $USER@$i -i $SSH_KEY "/system/backup/save name=$BACKUP_NAME"
+if [ $? -eq 0 ]; then
 
-scp -o StrictHostKeyChecking=no -i $SSH_KEY $USER@$i:/$BACKUP_NAME.rsc $BACKUP_DIR 
-
-scp -o StrictHostKeyChecking=no -i $SSH_KEY $USER@$i:/$BACKUP_NAME.backup $BACKUP_DIR
-
-ssh -o StrictHostKeyChecking=no $USER@$i -i $SSH_KEY "/system/backup/save name=$BACKUP_NAME"
-
-ssh -o StrictHostKeyChecking=no $USER@$i -i $SSH_KEY '/file/remove [/file find name~".backup"]'
-
-ssh -o StrictHostKeyChecking=no $USER@$i -i $SSH_KEY '/file/remove [/file find name~".rsc"]'
-done | which parallel -j 20 
+  DEV_NAME="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no $USER@$i -i $SSH_KEY "/system identity print" | grep "name" | cut -d ":" -f2 | tr -d ' ' | tr -d '\r' )"
+  DATE_NOW="$(date "+%Y_%m_%d")"
+  BACKUP_NAME="${DEV_NAME}-${DATE_NOW}"
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=no $USER@$i -p $PORT -i $SSH_KEY "/export file=$BACKUP_NAME"
+  
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=no $USER@$i -p $PORT -i $SSH_KEY "/system/backup/save name=$BACKUP_NAME"
+  
+  scp -o BatchMode=yes -o StrictHostKeyChecking=no -P $PORT -i $SSH_KEY $USER@$i:/$BACKUP_NAME.rsc $BACKUP_DIR 
+  
+  scp -o BatchMode=yes -o StrictHostKeyChecking=no -P $PORT -i $SSH_KEY $USER@$i:/$BACKUP_NAME.backup $BACKUP_DIR
+  
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=no $USER@$i -p $PORT -i $SSH_KEY "/system/backup/save name=$BACKUP_NAME"
+  
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=no $USER@$i -p $PORT -i $SSH_KEY '/file/remove [/file find name~".backup"]'
+  
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=no $USER@$i -p $PORT -i $SSH_KEY '/file/remove [/file find name~".rsc"]'
+fi
+done | which paralel -j 20 
